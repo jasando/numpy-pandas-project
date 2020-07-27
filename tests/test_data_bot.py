@@ -7,7 +7,7 @@ from data_bot import DataBot
 
 class TestDataBot(unittest.TestCase):
 
-    df = pd.read_csv('tests/titanic.csv')
+    df = pd.read_csv('titanic.csv')
 
     def test_impute(self):
         dataBot = DataBot(self.df, target_name='Survived')

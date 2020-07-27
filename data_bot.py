@@ -5,6 +5,7 @@ import numpy as np
 from enum import Enum
 from typing import List
 from dataset_attributes import DataSetAtrributes
+from sklearn.impute import SimpleImputer
 
 import warnings
 
@@ -18,6 +19,7 @@ class ImputerStrategy(Enum):
     CONSTANT = 'constant'
     REGRESSOR_MODEL = 'regressor_model'
     CLASSIFICATION_MODEL = 'clasification_model'
+    MOST_FREQUENT = 'most_frequent'
 
 
 class DataBot:
@@ -71,7 +73,11 @@ class DataBot:
         :param columns: list of columns names to impute.
         :param impute_strategy: Selected ImputerStrategy
         """
-        pass
+        print("Column",columns ,"Before", self.features[columns])
+        imp = SimpleImputer(missing_values=np.nan, strategy=impute_strategy.value)
+        imp = imp.fit(self.features[columns])
+        self.features[columns] = imp.transform(self.features[columns])
+        print("Column",columns, "After", self.features[columns])
 
     def one_hot_encode(self, col_name, categorical_values):
         """ Apply one hot encoding to the given column.
@@ -80,26 +86,47 @@ class DataBot:
         :param categorical_values: Unique values from self.features[col_name]
         :return:
         """
-        pass
+
+        # Get one hot encoding of column
+        # one_hot = pd.get_dummies(data=categorical_values, columns=col_name)
+        one_hot = pd.get_dummies(self.features[col_name], columns=col_name)
+        print("one hot", categorical_values, one_hot)
+        # Drop column as it is now encoded
+        self.features = self.features.drop(col_name, axis=1)
+        # Join the encoded df
+        self.features = self.features.join(one_hot)
+        print("one hot after", categorical_values, self.features)
 
     def normalize(self, columns):
         """Apply self.scale_range and self.scale_log to the given columns
         :param columns: list of columns names to normalize
         """
-        self.features[columns] = None
-        self.features[columns] = None
+        self.features[columns] = self.features[columns].apply(lambda x: self.scale_range(x))
+        self.features[columns] = self.features[columns].apply(lambda x: self.scale_log(x))
 
     def remove_null_columns(self):
         """Remove columns with a percentage of null values greater than the given threshold (self.null_threshold).
         
         """
-        pass
+        threshold = self.null_threshold * self.row_count()
+        columns = self.features.dropna(axis='columns', thresh=threshold, inplace=True)
+        # self.datasetAttributes.parameters['removed_columns'] += columns
+        self.datasetAttributes.parameters['removed_columns'] += self.dataset.columns.difference(
+            self.features.columns).tolist()
 
     def remove_high_cardinality_columns(self):
         """Remove columns with a cardinality percentage greater than the given threshold (self.cardinal_threshold).
 
         """
-        pass
+        threshold = self.null_threshold * self.row_count()
+        columns_with_high_cardinality = [col for col in self.features.columns if self.features[col].nunique() > threshold]
+        columns = self.features.dropna(axis='columns', thresh=threshold, inplace=True)
+        # self.datasetAttributes.parameters['removed_columns'] += columns
+        self.datasetAttributes.parameters['removed_columns'] += self.dataset.columns.difference(self.features.columns).tolist()
+
+    def row_count(self):
+         return len(self.features.index)
+
 
     def pre_process(self):
         """Preprocess dataset features before being send to ML algorithm for training.
@@ -107,37 +134,57 @@ class DataBot:
         # Implement this method with the given indications in the given order
 
         # Remove columns with null values above the threshold
+        self.remove_null_columns()
 
         # Remove columns with cardinality above the threshold
+        self.remove_high_cardinality_columns()
 
         # Create a python list with the names of columns with numeric values.
         # Numeric columns have one of the types stored in the list self.numeric_types
-        self.numeric_columns = None
+        self.numeric_columns = list(self.features.select_dtypes(include=self.numeric_types).columns)
 
         # Create a python list with the names of columns with string values.
         # Categorical columns have one of the types stored in the list self.string_types
-        self.categorical_columns = None
+        self.categorical_columns = list(self.features.select_dtypes(include=self.string_types).columns)
 
         # Create a python list with the names of numeric columns with at least one null value.
-        numeric_nulls = None
+        print("Numeric columns:", self.numeric_columns)
+        print("Categorical columns:", self.categorical_columns)
+        print(self.features.head(10))
+        # numeric_nulls = self.features.loc[self.numeric_columns, self.features.isnull().any()].columns
+        numeric_nulls = [col for col in self.numeric_columns if self.features[col].isnull().any()]
 
         # Create a python list with the names of categorical columns with at least one null value.
-        categorical_nulls = None
+        categorical_nulls = [col for col in self.categorical_columns if self.features[col].isnull().any()]
+        # categorical_nulls = self.features.loc[self.categorical_columns, self.features.isnull().any()].columns
 
         # Impute numerical columns with at least one null value.
+        self.impute(numeric_nulls, impute_strategy=ImputerStrategy.MEAN)
 
         # Impute categorical columns with at least one null value.
+        if categorical_nulls:
+            self.impute(categorical_nulls, impute_strategy=ImputerStrategy.MOST_FREQUENT)
 
         # These two lines gather information from the dataset for further use.
         self.datasetAttributes.set_column_values(self.categorical_columns, self.features)
         self.datasetAttributes.set_number_values(self.numeric_columns, self.features)
 
         # Apply one hot encoding to all categorical columns.
+        for col in self.categorical_columns:
+            categorical_values = self.features[col].unique()
+            self.one_hot_encode(col, categorical_values)
 
         # Normalize all numeric columns
+        # TODO uncomment
+        self.normalize(self.numeric_columns)
 
         # This line store relevant information from the processed dataset for further use.
+        # TODO uncomment line below
         self.datasetAttributes.save()
+        # print(self.features)
+        self.features = self.features.reset_index()
+        print(self.features.isnull())
+        print("los nuuuuuuulos", self.features.isnull().any())
 
     def pre_process_prediction(self, parameters):
         """Preprocess records from API calls before running predictions

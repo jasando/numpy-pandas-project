@@ -127,6 +127,8 @@ class Model:
         from sklearn.model_selection import train_test_split
         features = self.dataset.drop([self.target], axis=1)
         labels = self.dataset[self.target]
+        # TODO remove line below
+        # return train_test_split(features, labels, test_size=0.2, random_state=300)
         return train_test_split(features, labels, test_size=0.2, random_state=300, stratify=labels)
 
     def train_models(self):

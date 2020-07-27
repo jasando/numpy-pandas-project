@@ -1,5 +1,5 @@
 import json
-
+import numpy as np
 
 class DataSetAtrributes:
 
@@ -26,9 +26,21 @@ class DataSetAtrributes:
 
 
     def load(self):
-        with open(f'{self.project_path}/dataset_attributes.json') as json_file:
+        with open('dataset_attributes.json') as json_file:
             self.parameters = json.load(json_file)
 
     def save(self):
-        with open(f'{self.project_path}/dataset_attributes.json', 'w') as file:
-            json.dump(self.parameters, file)
+        with open('dataset_attributes.json', 'w') as file:
+            json.dump(self.parameters, file, cls=np_encoder)
+
+
+class np_encoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, np.integer):
+            return int(obj)
+        elif isinstance(obj, np.floating):
+            return float(obj)
+        elif isinstance(obj, np.ndarray):
+            return obj.tolist()
+        else:
+            return super(np_encoder, self).default(obj)
